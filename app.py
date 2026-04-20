@@ -5,118 +5,174 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# --- 1. PAGE CONFIGURATION ---
-st.set_page_config(page_title="SPAE - Predictive Maintenance", layout="wide")
+# --- CONFIGURATION ---
+st.set_page_config(page_title="SPAE Engine", layout="wide")
 
-# --- 2. THEME & BOX UNIFORMITY (The specific changes are here) ---
+# --- CUSTOM CSS (PREMIUM LOOK) ---
 st.markdown("""
-    <style>
-    .stApp { background-color: #f8fafc; }
+<style>
+body {
+    background-color: #0f172a;
+    color: white;
+}
+.main {
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+}
+.block-container {
+    padding-top: 2rem;
+}
+.metric-card {
+    background: rgba(255,255,255,0.05);
+    padding: 20px;
+    border-radius: 15px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.title {
+    font-size: 42px;
+    font-weight: 700;
+    color: #e2e8f0;
+}
+.subtitle {
+    font-size: 18px;
+    color: #94a3b8;
+}
+</style>
+""", unsafe_allow_html=True)
 
-    /* Force all metric containers to be the same height and style */
-    [data-testid="stMetric"] {
-        background-color: #ffffff;
-        border: 1px solid #e2e8f0;
-        padding: 20px !important;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        min-height: 150px; /* Forces uniform size */
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    }
-
-    /* Target the first metric box (Predicted RUL) - Light Blue background */
-    div[data-testid="column"]:nth-of-type(1) [data-testid="stMetric"] {
-        background-color: #e0f2fe !important;
-        border: 1px solid #7dd3fc !important;
-    }
-
-    /* Target the third metric box (Total Cycles) - Light Grey/Purple background */
-    div[data-testid="column"]:nth-of-type(3) [data-testid="stMetric"] {
-        background-color: #f3f4f6 !important;
-        border: 1px solid #d1d5db !important;
-    }
-
-    /* Force text to be dark for visibility */
-    [data-testid="stMetricValue"] > div {
-        color: #1e293b !important;
-        font-weight: 800 !important;
-    }
-    [data-testid="stMetricLabel"] > div > p {
-        color: #475569 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# --- 3. ASSET LOADING ---
+# --- LOAD MODEL ---
 @st.cache_resource
 def load_assets():
-    try:
-        model = joblib.load('random_forest_model.pkl')
-        features = joblib.load('feature_columns.pkl')
-        return model, features
-    except:
-        return None, None
+    model = joblib.load('random_forest_model.pkl')
+    features = joblib.load('feature_columns.pkl')
+    return model, features
 
 model, trained_features = load_assets()
 
-# --- 4. APP HEADER ---
-st.title("🛡️ SPAE: Smart Predictive Analytics Engine")
-st.markdown("### *Forecasting Industrial Asset Longevity*")
+# --- HEADER ---
+st.markdown('<div class="title">🛡️ SPAE</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Smart Predictive Analytics Engine</div>', unsafe_allow_html=True)
+
+st.caption("“Spae” — a Scottish verb meaning *to foretell or predict the future.*")
+
 st.divider()
 
-# --- 5. SIDEBAR ---
-st.sidebar.header("📁 Data Input")
-uploaded_file = st.sidebar.file_uploader("Upload FD001/FD002 Data", type=['csv', 'txt'])
+# --- SIDEBAR ---
+st.sidebar.header("📁 Upload Data")
+uploaded_file = st.sidebar.file_uploader("Upload NASA Turbofan Data", type=['csv', 'txt'])
 
-if uploaded_file and model is not None:
+if uploaded_file:
+
     df = pd.read_csv(uploaded_file, sep=r"\s+", header=None)
-    cols = ['engine_id', 'cycle', 'op1', 'op2', 'op3'] + [f'sensor{i}' for i in range(1, 22)]
-    df.columns = cols[:len(df.columns)]
-    
-    selected_engine = st.sidebar.selectbox("Select Engine Unit", df['engine_id'].unique())
+    columns = ['engine_id', 'cycle', 'op1', 'op2', 'op3'] + [f'sensor{i}' for i in range(1, 22)]
+    df.columns = columns[:len(df.columns)]
+
+    engine_list = df['engine_id'].unique()
+    selected_engine = st.sidebar.selectbox("Select Engine", engine_list)
+
     engine_df = df[df['engine_id'] == selected_engine].copy()
-    
-    # Feature Engineering
+
+    # --- FEATURE ENGINEERING ---
     sensor_cols = [c for c in df.columns if 'sensor' in c]
     for col in sensor_cols:
         engine_df[f'{col}_rollmean'] = engine_df[col].rolling(window=10).mean()
-    
-    engine_df = engine_df.ffill().bfill()
-    latest_state = engine_df.iloc[-1:].copy()
-    
-    if trained_features:
-        X_input = latest_state.reindex(columns=trained_features, fill_value=0)
-    else:
-        X_input = latest_state.drop(columns=['engine_id', 'cycle'], errors='ignore')
 
-    # --- 6. PREDICTION ---
+    engine_df = engine_df.ffill().bfill()
+
+    latest_state = engine_df.iloc[-1:].copy()
+
+    X_input = latest_state.reindex(columns=trained_features, fill_value=0)
+
+    # --- PREDICTION ---
     prediction = model.predict(X_input)[0]
     current_cycle = int(latest_state['cycle'].values[0])
 
-    # --- 7. DISPLAY BOXES ---
+    # --- STATUS LOGIC ---
+    if prediction > 50:
+        status = "HEALTHY"
+        color = "#22c55e"
+        risk = 20
+    elif prediction > 20:
+        status = "MAINTENANCE SOON"
+        color = "#f59e0b"
+        risk = 60
+    else:
+        status = "CRITICAL"
+        color = "#ef4444"
+        risk = 90
+
+    # --- METRICS ---
     col1, col2, col3 = st.columns(3)
 
-    with col1:
-        st.metric(label="Prophesied RUL", value=f"{int(prediction)} Cycles")
-    
-    with col2:
-        # Note: success/warning/error boxes have their own internal heights
-        if prediction > 50:
-            st.success("✅ **HEALTHY**")
-        elif prediction > 20:
-            st.warning("⚠️ **DUE**")
-        else:
-            st.error("🚨 **CRITICAL**")
+    col1.markdown(f"""
+    <div class="metric-card">
+        <h3>Predicted RUL</h3>
+        <h1 style="color:{color};">{int(prediction)} cycles</h1>
+    </div>
+    """, unsafe_allow_html=True)
 
-    with col3:
-        st.metric(label="Total Cycles Run", value=current_cycle)
+    col2.markdown(f"""
+    <div class="metric-card">
+        <h3>System Status</h3>
+        <h2 style="color:{color};">{status}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col3.markdown(f"""
+    <div class="metric-card">
+        <h3>Lifecycle Progress</h3>
+        <h2>{current_cycle} cycles</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # --- RISK BAR ---
+    st.write("### ⚠️ Failure Risk Estimation")
+    st.progress(risk)
 
     st.divider()
-    
-    # (Visualizations tabs follow here...)
-    st.info("Visual Analytics active for Engine " + str(selected_engine))
+
+    # --- TABS ---
+    tab1, tab2 = st.tabs(["📈 Sensor Intelligence", "🧠 Model Insights"])
+
+    # --- SENSOR PLOT ---
+    with tab1:
+        st.subheader("Sensor Behavior Over Time")
+
+        target_sensor = st.selectbox("Choose Sensor", sensor_cols, index=10)
+
+        fig, ax = plt.subplots(figsize=(10, 4))
+
+        sns.lineplot(x=engine_df['cycle'], y=engine_df[target_sensor], ax=ax, label="Raw", alpha=0.4)
+        sns.lineplot(x=engine_df['cycle'], y=engine_df[f'{target_sensor}_rollmean'], ax=ax, label="Smoothed", linewidth=2)
+
+        ax.set_title(f"{target_sensor} Trend")
+        ax.set_xlabel("Cycle")
+        ax.set_ylabel("Sensor Value")
+
+        st.pyplot(fig)
+
+    # --- FEATURE IMPORTANCE ---
+    with tab2:
+        st.subheader("Top Drivers Behind Prediction")
+
+        importances = model.feature_importances_
+        feat_imp = pd.Series(importances, index=X_input.columns).sort_values(ascending=False).head(10)
+
+        fig_imp, ax_imp = plt.subplots(figsize=(8, 5))
+        sns.barplot(x=feat_imp.values, y=feat_imp.index, ax=ax_imp)
+
+        ax_imp.set_title("Feature Importance")
+        st.pyplot(fig_imp)
 
 else:
-    st.info("Upload data to begin.")
+    st.markdown("""
+    ### 👋 Welcome to SPAE
+    
+    **SPAE (Smart Predictive Analytics Engine)** is designed to *foretell engine failures before they happen*.
+    
+    Upload a NASA turbofan dataset to begin:
+    
+    - 🔍 Analyze sensor behavior  
+    - 📊 Predict Remaining Useful Life  
+    - ⚠️ Detect failure risks early  
+    """)
