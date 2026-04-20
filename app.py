@@ -53,7 +53,7 @@ model, trained_features = load_assets()
 st.markdown('<div class="title">🛡️ SPAE</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Smart Predictive Analytics Engine</div>', unsafe_allow_html=True)
 
-st.caption("“Spae” — a Scottish verb meaning *to foretell or predict the future.*")
+st.caption("“Spae” — predict the future")
 
 st.divider()
 
