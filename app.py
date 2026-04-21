@@ -132,7 +132,12 @@ if uploaded_file:
     st.divider()
 
     # --- TABS ---
-    tab1, tab2 = st.tabs(["📈 Sensor Intelligence", "🧠 Model Insights"])
+    tab1, tab2, tab3 = st.tabs([
+    "📈 Sensor Intelligence",
+    "🧠 Model Insights",
+    "🔥 Heatmaps"
+])
+    
 
     # --- SENSOR PLOT ---
     with tab1:
@@ -163,6 +168,42 @@ if uploaded_file:
 
         ax_imp.set_title("Feature Importance")
         st.pyplot(fig_imp)
+
+        # --- HEATMAP TAB ---
+    with tab3:
+        st.subheader("System Heatmaps")
+
+        heatmap_type = st.selectbox(
+            "Choose Heatmap Type",
+            ["Sensor Correlation", "Feature Importance Heatmap"]
+        )
+
+        # --- CORRELATION HEATMAP ---
+        if heatmap_type == "Sensor Correlation":
+            corr = engine_df[sensor_cols].corr()
+
+            fig_corr, ax_corr = plt.subplots(figsize=(10, 6))
+            sns.heatmap(corr, cmap="coolwarm", ax=ax_corr)
+
+            ax_corr.set_title("Sensor Correlation Heatmap")
+            st.pyplot(fig_corr)
+
+        # --- FEATURE IMPORTANCE HEATMAP ---
+        else:
+            importances = model.feature_importances_
+            feat_imp = pd.Series(importances, index=X_input.columns)\
+                .sort_values(ascending=False).head(15)
+
+            fig_heat, ax_heat = plt.subplots(figsize=(6, 8))
+            sns.heatmap(
+                feat_imp.to_frame(),
+                annot=True,
+                cmap="viridis",
+                ax=ax_heat
+            )
+
+            ax_heat.set_title("Feature Importance Heatmap")
+            st.pyplot(fig_heat)
 
 else:
     st.markdown("""
